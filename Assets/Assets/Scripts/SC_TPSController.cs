@@ -9,8 +9,18 @@ public class SC_TPSController : MonoBehaviour
     public Transform playerCameraParent;
     public float lookSpeed = 2.0f;
     public float lookXLimit = 60.0f;
+
+    public Transform leftPosition;
+    public Transform rightPosition;
     
     Vector2 rotation = Vector2.zero;
+    private enum cameraPositions
+    {
+        LEFT,
+        RIGHT,
+    }
+
+    private cameraPositions cameraPos = cameraPositions.RIGHT;
 
     [HideInInspector]
 
@@ -27,6 +37,19 @@ public class SC_TPSController : MonoBehaviour
         rotation.x = Mathf.Clamp(rotation.x, -lookXLimit, lookXLimit);
         playerCameraParent.localRotation = Quaternion.Euler(rotation.x, 0, 0);
         transform.eulerAngles = new Vector2(0, rotation.y);
-        
+
+        if (Input.GetKeyUp(KeyCode.Q))
+        {
+            if (cameraPos == cameraPositions.RIGHT)
+            {
+                playerCameraParent.transform.position = leftPosition.transform.position;
+                cameraPos = cameraPositions.LEFT;
+            }
+            else if (cameraPos == cameraPositions.LEFT)
+            {
+                playerCameraParent.transform.position = rightPosition.transform.position;
+                cameraPos = cameraPositions.RIGHT;
+            }
+        }
     }
 }
