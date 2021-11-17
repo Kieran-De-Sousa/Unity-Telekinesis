@@ -64,6 +64,8 @@ namespace Packtool
         [Header("Animator Settings")]
         [Range(.1f, 5f)] public float animatorMovementSpeed = 1f;
 
+        private bool isLevitating = false;
+        
         void Start()
         {
             Cursor.lockState = CursorLockMode.Locked;
@@ -98,12 +100,24 @@ namespace Packtool
                 animator.SetBool("Float", !IsGrounded);
 
             if (IsGrounded && velocity.y < 0)
+            {
                 velocity.y = GROUNDED_VELOCITY;
+                isLevitating = false;
+            }
 
             if (!IsGrounded && WasGrounded && velocity.y < 0)
+            {
                 velocity.y = 0f;
-
-            if (Input.GetButtonDown("Jump") && IsGrounded)
+                isLevitating = false;
+            }
+            
+            // Levitation Check
+            if (Input.GetButtonDown("Jump") && !IsGrounded)
+            {
+                isLevitating = !isLevitating;
+            }
+            
+            else if (Input.GetButtonDown("Jump") && IsGrounded)
             {
                 if (jumpClipsData.clips.Length > 0)
                     SoundFX(jumpClipsData);
@@ -115,9 +129,18 @@ namespace Packtool
             {
                 if (landClipsData.clips.Length > 0)
                     SoundFX(landClipsData);
+                isLevitating = false;
             }
 
-            velocity.y += gravity * Time.deltaTime;
+            // Decides gravity based on whether player is in "levitating" state
+            if (isLevitating)
+            {
+                velocity.y = 0;
+            }
+            else if (!isLevitating)
+            {
+                velocity.y += gravity * Time.deltaTime;
+            }
 
             controller.Move(velocity * Time.deltaTime);
         }
