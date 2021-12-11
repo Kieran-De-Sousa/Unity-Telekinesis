@@ -12,4 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe45f92119651483ab1e1671577ca724, type: 3}
   m_Name: Jump Clips Data
   m_EditorClassIdentifier: 
+  volume: 1
+  pitch: 1
   clips: []

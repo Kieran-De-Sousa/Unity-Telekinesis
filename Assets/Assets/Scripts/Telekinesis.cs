@@ -11,17 +11,46 @@ public class Telekinesis : MonoBehaviour
     private Transform currentHighlight;
     
     // Telekinesis
+    public float pullForce;
+    public float throwForce;
+    public Transform grabPositon;
     private Transform grabbedObject;
+    private bool pressedGrab = false;
     private bool canGrab = false;
     private bool grabbing = false;
-    public Transform grabPositon;
+    private bool grabbed = false;
 
-    private void Update()
+    void Update()
     {
+        if (Input.GetButtonDown("Grab"))
+        {
+            pressedGrab = true;
+            Debug.Log("Pressed Grab!");
+        }
+        
+        if (canGrab && pressedGrab)
+        {
+            // When not already holding an object with telekinesis and not already pulling one
+            if (!grabbing && !grabbed)
+            {
+                grabbedObject = currentHighlight;
+                canGrab = false;
+                grabbing = true;
+            }
+            // When already holding an object with telekinesis
+            else if (grabbing)
+            {
+                grabbedObject.GetComponent<Rigidbody>().useGravity = true;
+                grabbedObject.transform.parent = null;
+                canGrab = true;
+                grabbing = false;
+            }
+        }
+        
         Ray raycast = Camera.current.ScreenPointToRay(Input.mousePosition);
         raycastHit = default;
-
-        if (raycastValidTarget(raycast, raycastHit))
+        // Throwable target was hit with raycast
+        if (raycastValidTarget(raycast, raycastHit) == 1)
         {
             currentHighlight = highlightedObject;
             var outline = currentHighlight.GetComponent<Outline>();
@@ -32,6 +61,15 @@ public class Telekinesis : MonoBehaviour
                 Debug.Log("Highlight turned on!");
             }
         }
+        // Shield Spawner target was hit with raycast
+        else if (raycastValidTarget(raycast, raycastHit) == 2)
+        {
+            // Instantiate objects from position and prevent player from grabbing either objects of floor
+            // Update bool to move them to shield position (in front of player, height doesn't matter currently)
+            // Keep their position updated in fixed update to in front of player
+            // Throw objects in ... direction (random directions possibly?) if player presses same button again
+            // Allow them to grab pieces of floor again or throwable objects
+        }
         else
         {
             // Turns off highlight when mouse stops hovering over object
@@ -39,56 +77,39 @@ public class Telekinesis : MonoBehaviour
         }
     }
 
-    private void FixedUpdate()
+    void FixedUpdate()
     {
-        if (canGrab)
-        {
-            // Telekinesis grab function here
-            if (Input.GetButtonDown("Fire1"))
-            {
-                Debug.Log("Pressed Grab!");
-                // When not already holding an object with telekinesis
-                if (!grabbing)
-                {
-                    grabbedObject = currentHighlight;
-                    grabbedObject.GetComponent<Rigidbody>().useGravity = false;
-                    grabbedObject.transform.position = grabPositon.position;
-                    grabbedObject.transform.parent = GameObject.Find("TelekinesisPos").transform;
-                    grabbing = true;
-                }
-                // When already holding an object with telekinesis
-                else if (grabbing)
-                {
-                    grabbedObject.GetComponent<Rigidbody>().useGravity = true;
-                    grabbedObject.transform.parent = null;
-                    grabbing = false;
-                }
-            }
-        }
-
         if (grabbing)
         {
-            
+            grabObject();
         }
-        else if (!grabbing)
+
+        if (grabbed && pressedGrab)
         {
-            
+            throwObject();
+            pressedGrab = false;
         }
+
+        pressedGrab = false;
     }
 
     /// Checks if mouse is hovering over a object with the "Throwable" tag, used
     /// for telekinesis abilities
-    private bool raycastValidTarget(Ray raycast, RaycastHit raycastHit)
+    private int raycastValidTarget(Ray raycast, RaycastHit raycastHit)
     {
         if (Physics.Raycast(raycast, out raycastHit))
         {
             highlightedObject = raycastHit.transform;
             if (highlightedObject.CompareTag("Throwable"))
             {
-                return true;
+                return 1;
+            }
+            if (highlightedObject.CompareTag("ShieldSpawnable"))
+            {
+                return 2;
             }
         }
-        return false;
+        return 0;
     }
 
     private void raycastRemoveHighlight()
@@ -101,6 +122,35 @@ public class Telekinesis : MonoBehaviour
             canGrab = false;
             Debug.Log("Highlight turned off!");
         }
+    }
+
+    private void grabObject()
+    {
+        if (grabbedObject.transform.position != grabPositon.transform.position)
+        {
+            grabbedObject.transform.position = Vector3.MoveTowards(grabbedObject.transform.position,
+                grabPositon.transform.position, pullForce);
+            grabbedObject.GetComponent<Rigidbody>().useGravity = false;
+            grabbedObject.transform.parent = GameObject.Find("TelekinesisPos").transform;
+        }
+        else
+        {
+            grabbing = false;
+            grabbed = true;
+        }
+    }
+
+    private void throwObject()
+    {
+        canGrab = true;
+        grabbed = false;
+        grabbedObject.transform.parent = null;
+        grabbedObject.GetComponent<Rigidbody>().velocity = transform.forward * throwForce;
+        grabbedObject.GetComponent<Rigidbody>().useGravity = true;
+        grabbedObject = null;
+        // Vector3 pullDirection = grabPositon.position - grabbedObject.position;
+        // Vector3 pullForce = pullDirection.normalized * 3.0f;
+        // grabbedObject.GetComponent<Rigidbody>().AddForce(pullForce, ForceMode.Force);AddForce
     }
 }
 
