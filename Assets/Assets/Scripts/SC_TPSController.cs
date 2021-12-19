@@ -36,15 +36,8 @@ public class SC_TPSController : MonoBehaviour
 
     void Update()
     {
-        // Player and Camera rotation
-        rotation.y += Input.GetAxis("Mouse X") * lookSpeed;
-        rotation.x += -Input.GetAxis("Mouse Y") * lookSpeed;
-        rotation.x = Mathf.Clamp(rotation.x, -lookXLimit, lookXLimit);
-        playerCameraParent.localRotation = Quaternion.Euler(rotation.x, 0, 0);
-        transform.eulerAngles = new Vector2(0, rotation.y);
-        
         // Camera swapping script
-        if (Input.GetKeyUp(KeyCode.Q))
+        if (Input.GetButtonDown("CameraSwap"))
         {
             cameraMoving = true;
             if (cameraPos == cameraPositions.RIGHT)
@@ -59,6 +52,14 @@ public class SC_TPSController : MonoBehaviour
                 movingTarget = rightPosition.transform.position;
             }
         }
+        
+        // Player and Camera rotation
+        rotation.y += Input.GetAxis("Mouse X") * lookSpeed;
+        rotation.x += -Input.GetAxis("Mouse Y") * lookSpeed;
+        rotation.x = Mathf.Clamp(rotation.x, -lookXLimit, lookXLimit);
+        playerCameraParent.localRotation = Quaternion.Euler(rotation.x, 0, 0);
+        transform.eulerAngles = new Vector2(0, rotation.y);
+
         if (cameraPos == cameraPositions.RIGHT)
         {
             movingTarget = leftPosition.transform.position;
@@ -67,7 +68,6 @@ public class SC_TPSController : MonoBehaviour
         {
             movingTarget = rightPosition.transform.position;
         }
-
     }
 
     private void FixedUpdate()

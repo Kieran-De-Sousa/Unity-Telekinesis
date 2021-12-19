@@ -9,6 +9,7 @@ public class Telekinesis : MonoBehaviour
 {
     // Raycast/Highlighting //
     private RaycastHit raycastHit;
+    private int raycastResult;
     private Vector3 hitPosition;
     private Transform highlightedObject;
     private Transform currentHighlight;
@@ -18,26 +19,40 @@ public class Telekinesis : MonoBehaviour
     private bool pressedShield = false;
     // Pulling/Throwing Objects
     [Header("Pulling/Throwing")]
-    public float pullForce;
-    public float throwForce;
+    public float grabPullForce;
+    public float grabThrowForce;
     public Transform grabPosition;
+    public float grabPositionThreshold = 1.0f;
     private Transform grabbedObject;
+    private enum grabStates
+    {
+        IDLE,
+        GRABBING,
+        GRABBED
+    };
+    private grabStates grabState = grabStates.IDLE;
     private bool canGrab = false;
-    private bool grabbing = false;
-    private bool grabbed = false;
     // Shield
-    [Header("Shield")]
+    [Header("Shield")] 
+    public float shieldPullForce;
+    public float shieldThrowForce;
     public Transform shieldPosition;
-    public GameObject shieldDebrisModel;
+    public GameObject[] shieldDebrisModel;
+    public float shieldPositionThreshold = 0.5f;
     public int shieldDebrisNumber;
     public Vector3 shieldGrabSize;
     public Vector3 shieldSize;
     private GameObject[] shieldDebris;
     private Vector3[] shieldPos;
     private Quaternion playerParentRotation;
+    private enum shieldStates
+    {
+        IDLE,
+        SHIELD_ACTIVATED,
+        SHIELD_ACTIVE
+    };
+    private shieldStates shieldState = shieldStates.IDLE;
     private bool canShield = false;
-    private bool shieldActivated = false;
-    private bool shieldActive = false;
 
     private void Start()
     {
@@ -64,86 +79,70 @@ public class Telekinesis : MonoBehaviour
             Debug.Log("Pressed Shield!");
         }
         
-        
-        // Pulling/Throwing objects //
-        if (canGrab && pressedGrab && !shieldActivated && !shieldActive)
-        {
-            // When not already holding an object with telekinesis and not already pulling one
-            if (!grabbing && !grabbed)
-            {
-                grabbedObject = currentHighlight;
-                canGrab = false;
-                canShield = false;
-                grabbing = true;
-            }
-            // When already holding an object with telekinesis
-            else if (grabbing)
-            {
-                grabbedObject.GetComponent<Rigidbody>().useGravity = true;
-                grabbedObject.transform.parent = null;
-                canGrab = true;
-                canShield = true;
-                grabbing = false;
-            }
-        }
-        // Shield //
-        if (canShield && pressedShield && !grabbing && !grabbed)
-        {
-            if (!shieldActivated && !shieldActive)
-            {
-                for (int i = 0; i < shieldDebris.Length; i++)
-                {
-                    Vector3 spawnPos = hitPosition + new Vector3(UnityEngine.Random.Range(-shieldGrabSize.x / 2, shieldGrabSize.x / 2), 
-                        UnityEngine.Random.Range(-shieldGrabSize.y / 2, shieldGrabSize.y / 2), UnityEngine.Random.Range(-shieldGrabSize.z / 2, shieldGrabSize.z / 2));
-                    shieldDebris[i] = Instantiate(shieldDebrisModel, spawnPos, highlightedObject.transform.rotation);
-                    
-                    shieldPos[i] = new Vector3(UnityEngine.Random.Range(-shieldSize.x / 2, shieldSize.x / 2), 
-                        UnityEngine.Random.Range(-shieldSize.y / 2, shieldSize.y / 2), UnityEngine.Random.Range(-shieldSize.z / 2, shieldSize.z / 2));
-                }
-                canShield = false;
-                canGrab = false;
-                shieldActivated = true;
-            }
-            else if (shieldActivated)
-            {
-                for (int i = 0; i < shieldDebris.Length; i++)
-                {
-                    Destroy(shieldDebris[i]);
-                }
-                canShield = true;
-                canGrab = true;
-                shieldActivated = false;
-                // !!! - Instantiate objects from position and prevent player from grabbing either objects of floor
-                // !!! Update bool to move them to shield position (in front of player, height doesn't matter currently)
-                // Keep their position updated in fixed update to in front of player
-                // !!! Throw objects in ... direction (random directions possibly?) if player presses same button again
-                // !!! Allow them to grab pieces of floor again or throwable objects
-            }
-        }
-        
         Ray raycast = Camera.current.ScreenPointToRay(Input.mousePosition);
         raycastHit = default;
+        raycastResult = raycastValidTarget(raycast, raycastHit);
+        // Turns off highlight when mouse stops hovering over object
+        if (raycastResult != 1)
+        {
+            raycastRemoveHighlight();
+        }
+        
+        // Pulling/Throwing objects //
         // Throwable target was hit with raycast
-        if (raycastValidTarget(raycast, raycastHit) == 1)
+        if (raycastResult == 1)
         {
             currentHighlight = highlightedObject;
             var outline = currentHighlight.GetComponent<Outline>();
             if (outline != null)
             {
                 outline.enabled = true;
-                canGrab = true;
-                Debug.Log("Highlight turned on!");
+            }
+
+            if (pressedGrab && shieldState == shieldStates.IDLE)
+            {
+                // When not already holding an object with telekinesis and not already pulling one
+                if (grabState == grabStates.IDLE)
+                {
+                    grabbedObject = currentHighlight;
+                    canGrab = canShield = false;
+                    grabState = grabStates.GRABBING;
+                }
+                // When already holding an object with telekinesis
+                else if (grabState == grabStates.GRABBING)
+                {
+                    grabbedObject.GetComponent<Rigidbody>().useGravity = true;
+                    grabbedObject.transform.parent = null;
+                    grabState = grabStates.IDLE;
+                }
             }
         }
+        // Shield //
         // Shield Spawner target was hit with raycast
-        else if (raycastValidTarget(raycast, raycastHit) == 2)
+        else if (pressedShield && raycastResult == 2 && grabState == grabStates.IDLE)
         {
-            canShield = true;
-        }
-        else
-        {
-            // Turns off highlight when mouse stops hovering over object
-            raycastRemoveHighlight();
+            if (shieldState == shieldStates.IDLE)
+            {
+                for (int i = 0; i < shieldDebris.Length; i++)
+                {
+                    Vector3 spawnPos = hitPosition + new Vector3(UnityEngine.Random.Range(-shieldGrabSize.x / 2, shieldGrabSize.x / 2), 
+                        UnityEngine.Random.Range(-shieldGrabSize.y / 2, shieldGrabSize.y / 2), UnityEngine.Random.Range(-shieldGrabSize.z / 2, shieldGrabSize.z / 2));
+                    // Instantiate random debris elements assigned in the inspector
+                    shieldDebris[i] = Instantiate(shieldDebrisModel[UnityEngine.Random.Range(0, shieldDebrisModel.Length)], spawnPos, highlightedObject.transform.rotation);
+                    
+                    shieldPos[i] = new Vector3(UnityEngine.Random.Range(-shieldSize.x / 2, shieldSize.x / 2), 
+                        UnityEngine.Random.Range(-shieldSize.y / 2, shieldSize.y / 2), UnityEngine.Random.Range(-shieldSize.z / 2, shieldSize.z / 2));
+                }
+                shieldState = shieldStates.SHIELD_ACTIVATED;
+            }
+            else if (shieldState == shieldStates.SHIELD_ACTIVATED)
+            {
+                foreach (var i in shieldDebris)
+                {
+                    Destroy(i);
+                }
+                shieldState = shieldStates.IDLE;
+            }
         }
         
         // Used for shield
@@ -153,30 +152,35 @@ public class Telekinesis : MonoBehaviour
     void FixedUpdate()
     {
         // Pulling throwable object
-        if (grabbing)
+        if (grabState == grabStates.GRABBING)
         {
             grabObject();
         }
 
         // Throwing throwable object
-        if (grabbed && pressedGrab)
+        if (grabState == grabStates.GRABBED)
         {
-            throwObject();
-            pressedGrab = false;
+            grabbedObject.transform.position = grabPosition.transform.position;
+            grabbedObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition;
+            if (pressedGrab)
+            {
+                throwObject();
+                pressedGrab = false; 
+            }
         }
 
         // Pulling shield debris
-        if (shieldActivated)
+        if (shieldState == shieldStates.SHIELD_ACTIVATED)
         {
             grabShield();
         }
 
         // Throwing shield debris
-        if (shieldActive)
+        if (shieldState == shieldStates.SHIELD_ACTIVE)
         {
             for (int i = 0; i < shieldDebrisNumber; i++)
             {
-                shieldDebris[i].transform.rotation = Quaternion.Euler(shieldDebris[i].transform.rotation.x, playerParentRotation.y, playerParentRotation.z);
+                shieldDebris[i].transform.rotation = Quaternion.Euler(shieldDebris[i].transform.rotation.x, playerParentRotation.y, shieldDebris[i].transform.rotation.z);
                 shieldDebris[i].GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezePosition;
             }
             if (pressedShield)
@@ -185,8 +189,8 @@ public class Telekinesis : MonoBehaviour
                 pressedShield = false;
             }
         }
-        pressedGrab = false;
-        pressedShield = false;
+        // Reset values for users keypresses every fixed update
+        pressedGrab = pressedShield = false;
     }
 
     /// Checks if mouse is hovering over a object with the "Throwable" tag, used
@@ -198,14 +202,19 @@ public class Telekinesis : MonoBehaviour
             highlightedObject = raycastHit.transform;
             if (highlightedObject.CompareTag("Throwable"))
             {
+                canGrab = true;
+                canShield = false;
                 return 1;
             }
-            if (highlightedObject.CompareTag("ShieldSpawnable"))
+            else if (highlightedObject.CompareTag("ShieldSpawnable"))
             {
                 hitPosition = raycastHit.point;
+                canGrab = false;
+                canShield = true;
                 return 2;
             }
         }
+        canGrab = canShield = false;
         return 0;
     }
 
@@ -216,33 +225,36 @@ public class Telekinesis : MonoBehaviour
             var outline = currentHighlight.GetComponent<Outline>();
             outline.enabled = false;
             currentHighlight = null;
-            canGrab = false;
             Debug.Log("Highlight turned off!");
         }
     }
 
     private void grabObject()
     {
-        if (grabbedObject.transform.position != grabPosition.transform.position)
+        float distance = distanceCalculator(grabbedObject.transform.position,grabPosition.transform.position);
+        if (distance > grabPositionThreshold)
         {
-            grabbedObject.transform.position = Vector3.MoveTowards(grabbedObject.transform.position,
-                grabPosition.transform.position, pullForce);
+            Vector3 pullDirection = grabPosition.transform.position - grabbedObject.transform.position;
+            Vector3 pullingForce = pullDirection.normalized * grabPullForce;
+            grabbedObject.GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
+            //grabbedObject.transform.position = Vector3.MoveTowards(grabbedObject.transform.position,
+            //grabPosition.transform.position, pullForce);
             grabbedObject.GetComponent<Rigidbody>().useGravity = false;
             grabbedObject.transform.parent = GameObject.Find("TelekinesisPos").transform;
         }
         else
         {
-            grabbing = false;
-            grabbed = true;
+            grabState = grabStates.GRABBED;
         }
     }
 
     private void throwObject()
     {
         canGrab = true;
-        grabbed = false;
+        grabState = grabStates.IDLE;
         grabbedObject.transform.parent = null;
-        grabbedObject.GetComponent<Rigidbody>().velocity = transform.forward * throwForce;
+        grabbedObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
+        grabbedObject.GetComponent<Rigidbody>().velocity = transform.forward * grabThrowForce;
         grabbedObject.GetComponent<Rigidbody>().useGravity = true;
         grabbedObject = null;
         // Vector3 pullDirection = grabPositon.position - grabbedObject.position;
@@ -252,12 +264,16 @@ public class Telekinesis : MonoBehaviour
 
     private void grabShield()
     {
-        for (int i = 0; i < shieldDebrisNumber; i++) 
+        for (int i = 0; i < shieldDebrisNumber; i++)
         {
-            Vector3 temp = shieldPosition.transform.position + shieldPos[i];
-            if (shieldDebris[i].transform.position != temp)
+            Vector3 endPoint = shieldPosition.transform.position + shieldPos[i];
+            float distance = distanceCalculator(shieldDebris[i].transform.position,endPoint);
+            if (distance > shieldPositionThreshold)
             {
-                shieldDebris[i].transform.position = Vector3.MoveTowards(shieldDebris[i].transform.position, temp, pullForce);
+                Vector3 pullDirection = endPoint - shieldDebris[i].transform.position;
+                Vector3 pullingForce = pullDirection.normalized * shieldPullForce;
+                shieldDebris[i].GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
+                //shieldDebris[i].transform.position = Vector3.MoveTowards(shieldDebris[i].transform.position, endPoint, pullForce);
                 shieldDebris[i].GetComponent<Rigidbody>().useGravity = false;
                 shieldDebris[i].GetComponent<Collider>().enabled = false;
                 shieldDebris[i].transform.parent = GameObject.Find("ShieldPos").transform;
@@ -268,8 +284,7 @@ public class Telekinesis : MonoBehaviour
                 {
                     shieldDebris[j].GetComponent<Collider>().enabled = true;
                 }
-                shieldActivated = false;
-                shieldActive = true;
+                shieldState = shieldStates.SHIELD_ACTIVE;
             }
         }
     }
@@ -277,15 +292,20 @@ public class Telekinesis : MonoBehaviour
     private void throwShield()
     {
         canShield = true;
-        shieldActive = false;
+        shieldState = shieldStates.IDLE;
         for (int i = 0; i < shieldDebrisNumber; i++)
         {
             shieldDebris[i].transform.parent = null;
             shieldDebris[i].GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-            shieldDebris[i].GetComponent<Rigidbody>().velocity = transform.forward * throwForce;
+            shieldDebris[i].GetComponent<Rigidbody>().velocity = transform.forward * shieldThrowForce;
             shieldDebris[i].GetComponent<Rigidbody>().useGravity = true;
             shieldDebris[i].GetComponent<Collider>().enabled = true;
         }
+    }
+    
+    private float distanceCalculator(Vector3 objectPulled, Vector3 destination)
+    {
+        return Vector3.Distance(objectPulled, destination);
     }
 }
 
