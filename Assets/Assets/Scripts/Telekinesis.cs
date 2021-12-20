@@ -21,7 +21,10 @@ public class Telekinesis : MonoBehaviour
     [Header("Pulling/Throwing")]
     public float grabPullForce;
     public float grabThrowForce;
+    [Tooltip("Position of where grabbed object should hover.")]
     public Transform grabPosition;
+    [Tooltip("Area around grab position where if the object enters, it counts" +
+             " as reaching the 'grabPosition' location.")]
     public float grabPositionThreshold = 1.0f;
     private Transform grabbedObject;
     private enum grabStates
@@ -29,18 +32,26 @@ public class Telekinesis : MonoBehaviour
         IDLE,
         GRABBING,
         GRABBED
-    };
+    }
     private grabStates grabState = grabStates.IDLE;
     private bool canGrab = false;
     // Shield
     [Header("Shield")] 
     public float shieldPullForce;
     public float shieldThrowForce;
+    [Tooltip("Position of where shield debris objects should hover " +
+             "(not accounting for their random scatter)")]
     public Transform shieldPosition;
+    [Tooltip("Array of shield debris models to randomly choose from upon instantiation")]
     public GameObject[] shieldDebrisModel;
+    [Tooltip("Area around shield position where if any shield debris enters," +
+             " it counts as reaching the 'shieldPosition' location.")]
     public float shieldPositionThreshold = 0.5f;
+    [Tooltip("Number of shield debris pieces to spawn.")]
     public int shieldDebrisNumber;
+    [Tooltip("Size of area to grab debris from.")]
     public Vector3 shieldGrabSize;
+    [Tooltip("Size of invisible shield that would have a origin of 'shieldPosition'")]
     public Vector3 shieldSize;
     private GameObject[] shieldDebris;
     private Vector3[] shieldPos;
@@ -50,9 +61,20 @@ public class Telekinesis : MonoBehaviour
         IDLE,
         SHIELD_ACTIVATED,
         SHIELD_ACTIVE
-    };
+    }
     private shieldStates shieldState = shieldStates.IDLE;
     private bool canShield = false;
+    // Additional Inspector Controls
+    public enum pullingModes
+    {
+        MOVETOWARDS,
+        ADDFORCE
+    }
+    [Header("Additional Controls")]
+    [Tooltip("Chose how to pull the object/shield debris - \n" +
+             "MOVETOWARDS: 'Vector3.Movetowards' \n" +
+             "ADDFORCE: 'addforce'")]
+    public pullingModes pullMode = pullingModes.ADDFORCE;
 
     private void Start()
     {
@@ -234,11 +256,19 @@ public class Telekinesis : MonoBehaviour
         float distance = distanceCalculator(grabbedObject.transform.position,grabPosition.transform.position);
         if (distance > grabPositionThreshold)
         {
-            Vector3 pullDirection = grabPosition.transform.position - grabbedObject.transform.position;
-            Vector3 pullingForce = pullDirection.normalized * grabPullForce;
-            grabbedObject.GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
-            //grabbedObject.transform.position = Vector3.MoveTowards(grabbedObject.transform.position,
-            //grabPosition.transform.position, pullForce);
+            // Pulls object based on designers choice
+            if (pullMode == pullingModes.ADDFORCE)
+            {
+                Vector3 pullDirection = grabPosition.transform.position - grabbedObject.transform.position;
+                Vector3 pullingForce = pullDirection.normalized * grabPullForce;
+                grabbedObject.GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
+            }
+            else if (pullMode == pullingModes.MOVETOWARDS)
+            {
+                grabbedObject.transform.position = Vector3.MoveTowards(grabbedObject.transform.position,
+                    grabPosition.transform.position, grabPullForce);
+            }
+            
             grabbedObject.GetComponent<Rigidbody>().useGravity = false;
             grabbedObject.transform.parent = GameObject.Find("TelekinesisPos").transform;
         }
@@ -254,12 +284,9 @@ public class Telekinesis : MonoBehaviour
         grabState = grabStates.IDLE;
         grabbedObject.transform.parent = null;
         grabbedObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-        grabbedObject.GetComponent<Rigidbody>().velocity = transform.forward * grabThrowForce;
+        grabbedObject.GetComponent<Rigidbody>().velocity = Input.mousePosition * grabThrowForce;
         grabbedObject.GetComponent<Rigidbody>().useGravity = true;
         grabbedObject = null;
-        // Vector3 pullDirection = grabPositon.position - grabbedObject.position;
-        // Vector3 pullForce = pullDirection.normalized * 3.0f;
-        // grabbedObject.GetComponent<Rigidbody>().AddForce(pullForce, ForceMode.Force);AddForce
     }
 
     private void grabShield()
@@ -270,10 +297,18 @@ public class Telekinesis : MonoBehaviour
             float distance = distanceCalculator(shieldDebris[i].transform.position,endPoint);
             if (distance > shieldPositionThreshold)
             {
-                Vector3 pullDirection = endPoint - shieldDebris[i].transform.position;
-                Vector3 pullingForce = pullDirection.normalized * shieldPullForce;
-                shieldDebris[i].GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
-                //shieldDebris[i].transform.position = Vector3.MoveTowards(shieldDebris[i].transform.position, endPoint, pullForce);
+                // Pulls object based on designers choice
+                if (pullMode == pullingModes.ADDFORCE)
+                {
+                    Vector3 pullDirection = endPoint - shieldDebris[i].transform.position;
+                    Vector3 pullingForce = pullDirection.normalized * shieldPullForce;
+                    shieldDebris[i].GetComponent<Rigidbody>().AddForce(pullingForce, ForceMode.Force);
+                }
+                else if (pullMode == pullingModes.MOVETOWARDS)
+                {
+                    shieldDebris[i].transform.position = Vector3.MoveTowards(shieldDebris[i].transform.position, endPoint, shieldPullForce);
+                }
+                
                 shieldDebris[i].GetComponent<Rigidbody>().useGravity = false;
                 shieldDebris[i].GetComponent<Collider>().enabled = false;
                 shieldDebris[i].transform.parent = GameObject.Find("ShieldPos").transform;
