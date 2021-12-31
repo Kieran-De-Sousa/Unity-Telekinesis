@@ -284,7 +284,7 @@ public class Telekinesis : MonoBehaviour
         grabState = grabStates.IDLE;
         grabbedObject.transform.parent = null;
         grabbedObject.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-        grabbedObject.GetComponent<Rigidbody>().velocity = Input.mousePosition * grabThrowForce;
+        grabbedObject.GetComponent<Rigidbody>().velocity = transform.forward * grabThrowForce;
         grabbedObject.GetComponent<Rigidbody>().useGravity = true;
         grabbedObject = null;
     }
