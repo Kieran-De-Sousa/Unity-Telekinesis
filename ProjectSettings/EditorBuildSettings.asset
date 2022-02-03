@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Packages/Third Person Shooter - Character Movement/Main.unity
+    guid: 2e5deaa82951040e4af1b27063a07382
   m_configObjects: {}
